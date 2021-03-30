@@ -1,0 +1,13 @@
+name = "Tomato"
+uuid = "bc12277a-f6a6-441d-bdc6-a88fa5486a60"
+authors = ["kreikrei <kreitonstrs@gmail.com> and contributors"]
+version = "0.1.0"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
