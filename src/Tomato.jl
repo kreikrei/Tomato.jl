@@ -26,5 +26,7 @@ export V,dist,K,T,d
 
 #core
 export passes
+export star
+export dis
 
 end
