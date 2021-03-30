@@ -1,6 +1,2 @@
-using Tomato
-using Test
-
-@testset "Tomato.jl" begin
-    # Write your tests here.
-end
+using SafeTestsets
+@safetestset "Tomato test" begin include("testsets.jl") end
