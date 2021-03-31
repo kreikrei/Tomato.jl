@@ -28,5 +28,7 @@ export V,dist,K,T,d
 export passes
 export star
 export dis
+export costaggr
+export costdis
 
 end
