@@ -40,6 +40,8 @@ struct aggr
     v::JuMP.Containers.DenseAxisArray
     y::JuMP.Containers.DenseAxisArray
     z::JuMP.Containers.DenseAxisArray
+    o::JuMP.Containers.DenseAxisArray
+    p::JuMP.Containers.DenseAxisArray
 end
 
 struct disaggr

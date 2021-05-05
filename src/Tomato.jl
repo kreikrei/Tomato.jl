@@ -27,7 +27,9 @@ export V,dist,K,T,d
 #core
 export passes
 export star
-export dis
+export generate
+export residual
+export disaggregate
 export costaggr
 export costdis
 

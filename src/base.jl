@@ -41,7 +41,7 @@ function extract!(path::String;f::String) #extract from excel
     end
 
     dist = JuMP.Containers.DenseAxisArray{Float64}(undef, keys(V), keys(V))
-    dist .= 999999999
+    dist .= 999999
     for i in keys(V), j in keys(V)
         if i != j
             if f == "haversine"
