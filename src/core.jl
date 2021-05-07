@@ -7,20 +7,20 @@ passes(i) = [k for k in K() if (i in K(k).cover)]
 function star()
     #CREATE MODEL
     feas = Model(get_optimizer())
-    set_optimizer_attribute(feas,"MIPGap",0.005)
-    set_optimizer_attribute(feas,"Presolve",2)
-    set_optimizer_attribute(feas,"MIPFocus",1)
+    #set_optimizer_attribute(feas,"MIPGap",0.005)
+    #set_optimizer_attribute(feas,"Presolve",2)
+    #set_optimizer_attribute(feas,"MIPFocus",3)
 
     #CREATE DELIVERY VARIABLES AND CONSTRAINTS
     R = Dict()
 
     for k in K(), t in T()
-        u = @variable(feas, [i = K(k).cover], Int)
-        v = @variable(feas, [j = K(k).cover], Int)
-        y = @variable(feas, [i = K(k).cover], Int)
-        z = @variable(feas, [j = K(k).cover], Int)
-        o = @variable(feas, [i = K(k).cover, j = K(k).cover], Int)
-        p = @variable(feas, [i = K(k).cover, j = K(k).cover], Int)
+        u = @variable(feas, [i = K(k).cover])#, Int)
+        v = @variable(feas, [j = K(k).cover])#, Int)
+        y = @variable(feas, [i = K(k).cover])#, Int)
+        z = @variable(feas, [j = K(k).cover])#, Int)
+        o = @variable(feas, [i = K(k).cover, j = K(k).cover])#, Int)
+        p = @variable(feas, [i = K(k).cover, j = K(k).cover])#, Int)
 
         @constraint(feas, [j = K(k).cover], z[j] >= 0)
         @constraint(feas, [j = K(k).cover], v[j] >= 0)
@@ -98,7 +98,7 @@ function generate(R::Dict,j::Int64,k_dis::Int64,t_dis::Int64)
     nodes = union(source,sink)
 
     demands = Dict{Int64,Int64}(
-        sink .=> [value.(R[(k_dis,t_dis)].o[i,source]) for i in sink]
+        sink .=> [round.(value.(R[(k_dis,t_dis)].o[i,source])) for i in sink]
     ) #DEMANDS NGEEXTRACT VALUE O NYA
 
     NV = K(k_dis).BP[source] #NV DIDAPAT DR K_DIS, SOURCE
@@ -159,7 +159,7 @@ function generate(R::Dict,j::Int64,k_dis::Int64,t_dis::Int64)
 
         println("added $(length(additional_route)) routes")
         for r in additional_route
-            for i in collect(keys(demands))
+            for i in last(r).u.axes[1][2:end] #source not included
                 demands[i] -= round.(value.(last(r).u[i]))
             end
 
@@ -178,8 +178,7 @@ end #GENERATE (INPUT: AGGR SOL, J, K_DIS, T_DIS)
 function residual(source,k,demands,NV,Q)
     res = Model(get_optimizer())
     set_silent(res)
-    demands = filter(p -> last(p) > 0,demands)
-    sink = collect(keys(demands))
+    sink = collect(keys(filter(p -> last(p) > 0,demands)))
     nodes = union(source,sink)
 
     routes = Dict{Int64,NamedTuple}()
@@ -315,27 +314,27 @@ function disaggregate(deli,t)
 end
 
 function costaggr(R,k_aggr,t_aggr)
-    val = value.(
+    val = (
         sum(
-            sum(2 * K(k).vx * dist(i,j) * R[(k,t)].p[i,j]
+            sum(2 * K(k).vx * dist(i,j) * value(R[(k,t)].p[i,j])
                 for i in K(k).cover, j in K(k).cover
             )
             for k in k_aggr, t in t_aggr
         ) +
         sum(
-            sum(K(k).vl * dist(i,j) * R[(k,t)].o[i,j]
+            sum(K(k).vl * dist(i,j) * value(R[(k,t)].o[i,j])
                 for i in K(k).cover, j in K(k).cover
             )
             for k in k_aggr, t in t_aggr
         ) +
         sum(
-            sum(K(k).fd * R[(k,t)].u[i]
+            sum(K(k).fd * value(R[(k,t)].u[i])
                 for i in K(k).cover
             )
             for k in k_aggr, t in t_aggr
         ) +
         sum(
-            sum(K(k).fp * R[(k,t)].z[j]
+            sum(K(k).fp * value(R[(k,t)].z[j])
                 for j in K(k).cover
             )
             for k in k_aggr, t in t_aggr
