@@ -6,10 +6,6 @@ const vertex_data = Ref{Any}(nothing)
 V() = sort!(collect(keys(vertex_data[])))
 V(i) = vertex_data[][i]
 
-const distance_data = Ref{Any}(nothing)
-dist() = distance_data[]
-dist(i,j) = distance_data[][i,j]
-
 const vehicle_data = Ref{Any}(nothing)
 K() = sort!(collect(keys(vehicle_data[])))
 K(k) = vehicle_data[][k]
@@ -31,36 +27,8 @@ function extract!(path::String;f::String) #extract from excel
         data[Symbol(sheets)] = df #DEFINE THE NAME FROM THE WORKSHEET
     end
 
-    V = Dict{Int64,vtx}() #INITIATE VERTICES
-    for v in eachrow(data[:vertices]) #ITERATE OVER DATA
-        V[v.id] = vtx(
-            v.name, v.type,
-            v.x, v.y, v.MAX, v.MIN, v.START,
-            v.h
-        )
-    end
-
-    dist = JuMP.Containers.DenseAxisArray{Float64}(undef, keys(V), keys(V))
-    dist .= 999999
-    for i in keys(V), j in keys(V)
-        if i != j
-            if f == "haversine"
-                dist[i,j] = haversine([V[i].x,V[i].y],[V[j].x,V[j].y],6378.137)
-            else #if f == "euclidean"
-                dist[i,j] = euclidean([V[i].x,V[i].y],[V[j].x,V[j].y])
-            end
-        end
-    end
-
-    K = Dict{Int64,veh}() #INITIATE VEHICLES
-    for k in eachrow(data[:vehicles]) #ITERATE OVER DATA
-        K[k.id] = veh(
-            k.name, k.type,
-            parse.(Int64,split(k.cover)),
-            Dict(parse.(Int64,split(k.cover)) .=>  parse.(Int64,split(k.BP))), k.Q,
-            k.vx, k.vl, k.fp, k.fd
-        )
-    end
+    V = process_vertex(data[:vertices])
+    K = process_vehicle(data[:vehicles])
 
     T = collect( #range from starting month for duration
         range(
@@ -72,15 +40,58 @@ function extract!(path::String;f::String) #extract from excel
 
     d = JuMP.Containers.DenseAxisArray(
         Array{Float64}(data[:demands][:,string.(T)]), #dataset
-        Array{Int64}(data[:demands].point), #dims 1
+        Array{String}(data[:demands].point), #dims 1
         T #dims 2
     )
 
     vertex_data[] = V
-    distance_data[] = dist
     vehicle_data[] = K
     period_data[] = T
     demand_data[] = d
 
-    return V,dist,K,T,d
+    return V,K,T,d
+end
+
+function process_vertex(df::DataFrame)
+    V = Dict{String,vtx}() #INITIATE VERTICES
+    for v in eachrow(df) #ITERATE OVER DATA
+        V[v.name] = vtx(
+            v.x, v.y, v.MAX, v.MIN, v.START, v.h
+        )
+    end
+
+    return V
+end
+
+function process_vehicle(df::DataFrame)
+    K = Dict{String,veh}() #INITIATE VEHICLES
+    idx_asal = unique(df.Asal)
+    idx_tujuan = unique(df.Tujuan)
+    list_moda = unique(df.Moda)
+
+    for m in list_moda
+        trayek = filter(p -> p.Moda == m, df)
+        unique!(trayek) #trayek yang unik
+
+        kapasitas = JuMP.Containers.DenseAxisArray{Int64}(undef,idx_asal,idx_tujuan)
+        biayapeti = JuMP.Containers.DenseAxisArray{Int64}(undef,idx_asal,idx_tujuan)
+        biayajarak = JuMP.Containers.DenseAxisArray{Int64}(undef,idx_asal,idx_tujuan)
+        operasi = JuMP.Containers.DenseAxisArray{Int64}(undef,idx_asal,idx_tujuan)
+
+        kapasitas .= 0
+        biayapeti .= 0
+        biayajarak .= 0
+        operasi .= 0
+
+        for r in eachrow(trayek)
+            kapasitas[r.Asal,r.Tujuan] = r.kapasitas
+            biayapeti[r.Asal,r.Tujuan] = r.peti_cost
+            biayajarak[r.Asal,r.Tujuan] = r.jarak_cost
+            operasi[r.Asal,r.Tujuan] = 1
+        end
+
+        K[m] = veh(m,kapasitas,biayapeti,biayajarak,operasi)
+    end
+
+    return K
 end
