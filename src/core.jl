@@ -7,7 +7,7 @@ passes(i) = [k for k in K() if (i in K(k).cover)]
 function star()
     #CREATE MODEL
     feas = Model(get_optimizer())
-    #set_optimizer_attribute(feas,"MIPGap",0.005)
+    #set_optimizer_attribute(feas,"MIPGap",0.0005)
     #set_optimizer_attribute(feas,"Presolve",2)
     #set_optimizer_attribute(feas,"MIPFocus",3)
 
@@ -53,6 +53,13 @@ function star()
     #CREATE INVENTORY LEVEL VARIABLE AND CONSTRAINTS
     @variable(feas, I[i = V(), t = vcat(first(T()) - 1, T())])
 
+    #NETWORK STRUCTURE
+    @variable(feas, P[i = V(), j = V()], Int)
+
+    @constraint(feas, [i = V(), j = V()],
+        sum(R[(k,t)].p[i,j] for k in intersect(passes(i),passes(j)), t in T()) == P[i,j]
+    ) #network structure on-off
+
     @constraint(feas, λ[i = V(), t = T()],
         I[i,t-1] + sum(R[(k,t)].u[i] for k in passes(i)) ==
         d(i,t) + sum(R[(k,t)].v[i] for k in passes(i)) + I[i,t]
@@ -76,7 +83,8 @@ function star()
             for k in K(), i in K(k).cover, j in K(k).cover, t in T()
         ) +
         sum(K(k).fd * R[(k,t)].u[i] for k in K(), i in K(k).cover, t in T()) +
-        sum(K(k).fp * R[(k,t)].z[j] for k in K(), j in K(k).cover, t in T())
+        sum(K(k).fp * R[(k,t)].z[j] for k in K(), j in K(k).cover, t in T()) +
+        0.000001 * sum(P)
     )
 
     optimize!(feas)
