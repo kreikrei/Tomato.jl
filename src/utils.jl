@@ -18,7 +18,7 @@ const demand_data = Ref{Any}(nothing)
 d() = demand_data[]
 d(i,t) = demand_data[][i,t]
 
-function extract!(path::String;f::String) #extract from excel
+function extract!(path::String) #extract from excel
     xf = XLSX.readxlsx(path) #READ WORKSHEET
     data = Dict{Symbol,DataFrame}() #DATAFRAME DICT
 
@@ -39,8 +39,8 @@ function extract!(path::String;f::String) #extract from excel
     )
 
     d = JuMP.Containers.DenseAxisArray(
-        Array{Float64}(data[:demands][:,string.(T)]), #dataset
-        Array{String}(data[:demands].point), #dims 1
+        Array{Float64}(data[:non_negative_demands][:,string.(T)]), #dataset
+        Array{String}(data[:non_negative_demands].point), #dims 1
         T #dims 2
     )
 

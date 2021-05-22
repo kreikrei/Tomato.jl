@@ -23,6 +23,7 @@ export reset_optimizer
 #core
 export relaxed
 export roundUp,splatBuild
-export cost
+export deliveryCost,inventoryCost
+export stockLevels
 
 end

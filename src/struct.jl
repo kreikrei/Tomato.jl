@@ -21,8 +21,23 @@ end
 struct delivery
     asal::String
     tujuan::String
-    load::Int64 #jumlah peti
-    trip::Int64 #trip yang dilakukan
+    load::Float64 #jumlah peti
+    trip::Float64 #trip yang dilakukan
     k::String #jenis kendaraan
     t::Int64 #period
+
+    function delivery(asal,tujuan,load,trip,k,t)
+        if !(asal in V()) || !(tujuan in V())
+            error("not in area")
+            return nothing
+        elseif load > K(k).Q[asal,tujuan] * ceil(trip)
+            error("overload")
+            return nothing
+        elseif trip > K(k).lim[asal,tujuan]
+            error("overtrip")
+            return nothing
+        else
+            return new(asal,tujuan,load,trip,k,t)
+        end
+    end
 end
