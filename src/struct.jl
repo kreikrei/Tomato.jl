@@ -25,10 +25,3 @@ struct delivery
     k::String #jenis kendaraan
     t::Int64 #period
 end
-
-struct disaggr
-    asal::String
-    tujuan::String
-    kendaraan::String
-    q::Int64
-end
