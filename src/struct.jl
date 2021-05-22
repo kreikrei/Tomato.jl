@@ -8,26 +8,22 @@ struct vtx
     MAX::Int64 #max inventory level
     MIN::Int64 #min inventory level
     START::Int64 #starting inventory level
-
-    #COSTS
     h::Float64 #inv cost per unit
 end
 
 struct veh
-    #IDENTIFIERS
-    id::String
-
-    #PARAM
-    cap::JuMP.Containers.DenseAxisArray #kapasitas segmen
+    Q::JuMP.Containers.DenseAxisArray #kapasitas segmen
     f::JuMP.Containers.DenseAxisArray #peti_cost
-    g::JuMP.Containers.DenseAxisArray #dist * jarak_cost
-    opsnet::JuMP.Containers.DenseAxisArray #0-1
+    g::JuMP.Containers.DenseAxisArray #trip_cost
+    lim::JuMP.Containers.DenseAxisArray #usage_limit
 end
 
-struct aggr
+struct delivery
     asal::String
     tujuan::String
     q::Int64 #tidak peduli berapa pengiriman
+    k::String #jenis kendaraan
+    t::Int64 #period
 end
 
 struct disaggr

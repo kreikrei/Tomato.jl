@@ -25,5 +25,6 @@ export V,K,T,d
 
 #core
 export cluster
+export reduced
 
 end

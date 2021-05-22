@@ -73,24 +73,24 @@ function process_vehicle(df::DataFrame)
         trayek = filter(p -> p.Moda == m, df)
         unique!(trayek) #trayek yang unik
 
-        kapasitas = JuMP.Containers.DenseAxisArray{Int64}(undef,idx_asal,idx_tujuan)
-        biayapeti = JuMP.Containers.DenseAxisArray{Int64}(undef,idx_asal,idx_tujuan)
-        biayajarak = JuMP.Containers.DenseAxisArray{Int64}(undef,idx_asal,idx_tujuan)
-        operasi = JuMP.Containers.DenseAxisArray{Int64}(undef,idx_asal,idx_tujuan)
+        Q = JuMP.Containers.DenseAxisArray{Int64}(undef,idx_asal,idx_tujuan)
+        f = JuMP.Containers.DenseAxisArray{Int64}(undef,idx_asal,idx_tujuan)
+        g = JuMP.Containers.DenseAxisArray{Int64}(undef,idx_asal,idx_tujuan)
+        lim = JuMP.Containers.DenseAxisArray{Int64}(undef,idx_asal,idx_tujuan)
 
-        kapasitas .= 0
-        biayapeti .= 0
-        biayajarak .= 0
-        operasi .= 0
+        Q .= 0
+        f .= 0
+        g .= 0
+        lim .= 0
 
         for r in eachrow(trayek)
-            kapasitas[r.Asal,r.Tujuan] = r.kapasitas
-            biayapeti[r.Asal,r.Tujuan] = r.peti_cost
-            biayajarak[r.Asal,r.Tujuan] = r.jarak_cost
-            operasi[r.Asal,r.Tujuan] = 1
+            Q[r.Asal,r.Tujuan] = round(r.kapasitas)
+            f[r.Asal,r.Tujuan] = round(r.peti_cost)
+            g[r.Asal,r.Tujuan] = round(r.trip_cost)
+            lim[r.Asal,r.Tujuan] = round(r.limit)
         end
 
-        K[m] = veh(m,kapasitas,biayapeti,biayajarak,operasi)
+        K[m] = veh(Q,f,g,lim)
     end
 
     return K
