@@ -21,7 +21,8 @@ end
 struct delivery
     asal::String
     tujuan::String
-    q::Int64 #tidak peduli berapa pengiriman
+    load::Int64 #jumlah peti
+    trip::Int64 #trip yang dilakukan
     k::String #jenis kendaraan
     t::Int64 #period
 end

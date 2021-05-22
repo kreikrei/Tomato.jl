@@ -6,25 +6,23 @@ using DataFrames
 using Distances
 
 include("struct.jl")
-include("settings.jl")
-include("base.jl")
+include("utils.jl")
 include("core.jl")
 
 #struct
 export vtx,veh
-export aggr,disaggr
+export delivery
 
-#settings
+#utils
+export extract!
+export V,K,T,d
 export set_optimizer!
 export get_optimizer
 export reset_optimizer
 
-#base
-export extract!
-export V,K,T,d
-
 #core
-export cluster
-export reduced
+export relaxed
+export roundUp,splatBuild
+export cost
 
 end
