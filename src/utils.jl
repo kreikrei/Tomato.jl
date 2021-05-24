@@ -6,6 +6,9 @@ const vertex_data = Ref{Any}(nothing)
 V() = sort!(collect(keys(vertex_data[])))
 V(i) = vertex_data[][i]
 
+const edge_list = Ref{Any}(nothing)
+all_edges() = edge_list[]
+
 const vehicle_data = Ref{Any}(nothing)
 K() = sort!(collect(keys(vehicle_data[])))
 K(k) = vehicle_data[][k]
@@ -44,12 +47,21 @@ function extract!(path::String) #extract from excel
         T #dims 2
     )
 
+    #=d = JuMP.Containers.DenseAxisArray(
+        Array{Float64}(data[:demands][:,string.(T)]), #dataset
+        Array{String}(data[:demands].point), #dims 1
+        T #dims 2
+    )=#
+
     vertex_data[] = V
     vehicle_data[] = K
     period_data[] = T
     demand_data[] = d
 
-    return V,K,T,d
+    edges = [(asal=i[1],tujuan=i[2]) for i in collect(permutations(collect(keys(V)),2))]
+    edge_list[] = edges
+
+    return V,K,T,d,edges
 end
 
 function process_vertex(df::DataFrame)

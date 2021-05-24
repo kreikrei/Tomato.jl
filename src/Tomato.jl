@@ -4,6 +4,7 @@ using JuMP
 using XLSX
 using DataFrames
 using Distances
+using Combinatorics
 
 include("struct.jl")
 include("utils.jl")
@@ -21,9 +22,13 @@ export get_optimizer
 export reset_optimizer
 
 #core
-export relaxed
+export relaxed,original
+export cluster,reduced
 export roundUp,splatBuild
-export deliveryCost,inventoryCost
-export stockLevels
+export optimizeVolume,iterOV
+export deliveryCost,inventoryCost,totalCost
+export stockLevels,feasibility
+export destroy,repair,search
+export all_edges
 
 end
