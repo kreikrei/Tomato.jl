@@ -72,7 +72,7 @@ function extract!(path::String;f::String) #extract from excel
     demand_data[] = d
     distance_data[] = dist
 
-    return V,K,T,d,edges,dist
+    return V,K,T,d,dist
 end
 
 function process_vertex(df::DataFrame)
