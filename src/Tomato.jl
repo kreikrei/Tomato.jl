@@ -16,7 +16,7 @@ export delivery
 
 #utils
 export extract!
-export V,K,T,d
+export V,K,T,d,dist
 export set_optimizer!
 export get_optimizer
 export reset_optimizer
@@ -29,6 +29,6 @@ export optimizeVolume,iterOV
 export deliveryCost,inventoryCost,totalCost
 export stockLevels,feasibility
 export destroy,repair,search
-export all_edges
+
 
 end

@@ -391,52 +391,40 @@ function feasibility(deliveries::Vector{delivery})
 end #track infeasibilities in inventory level
 
 function destroy(deliveries::Vector{delivery})
-    c = rand(V()) #random combination of random length
-
     destroyed = deepcopy(deliveries) #make independent duplicate
-    removed = filter(p -> p.tujuan == c || p.asal == c, destroyed) #connected to c set
-    for r in removed
-        deleteat!(destroyed, findall(x -> x == r, destroyed))
-    end #remove all
+    removed = Vector{delivery}()
+    c = Vector{String}()
 
-    return destroyed,c,removed
-end #make the solution infeasible
+    vertex_set = deepcopy(V()) #vertex set to remove
+    while length(removed)/(length(removed)+length(destroyed)) < 0.5
+        key = rand(vertex_set) #random combination of random length
+        deleteat!(vertex_set, findall(x -> x == key, vertex_set)) #remove from candidate
 
-function repair(destroyed::Vector{delivery},c::String,removed::Vector{delivery})
+        to_remove = filter(p -> p.tujuan == key || p.asal == key, destroyed)
+        for r in to_remove
+            deleteat!(destroyed, findall(x -> x == r, destroyed))
+        end #remove all
+        append!(removed,to_remove)
+        push!(c,key)
+    end
+
+    return destroyed,removed
+end #make the solution infeasible, return destroyed and removed
+
+function repair(destroyed::Vector{delivery},removed::Vector{delivery})
     feas = Model(get_optimizer())
     set_silent(feas)
 
-    o★ = JuMP.Containers.DenseAxisArray{Int64}(undef,V(),V(),K(),T())
-    p★ = JuMP.Containers.DenseAxisArray{Int64}(undef,V(),V(),K(),T())
-
-    o★ .= 0
-    p★ .= 0
-
-    for i in V(), j in V(), k in K(), t in T()
-        existing = filter(p -> p.asal==i && p.tujuan==j && p.k==k && p.t==t, destroyed)
-        if !isempty(existing)
-            o★[i,j,k,t] = round(existing[1].load)
-            p★[i,j,k,t] = round(existing[1].trip)
-        end
-    end #transform existing deliveries into matrix
-
-    to_repair = filter(p ->  p.asal == c || p.tujuan == c,all_edges())
-    #println(to_repair)
-
-    @variable(feas, o[e = to_repair, k = K(), t = T()] >= 0, Int)
-    @variable(feas, p[e = to_repair, k = K(), t = T()] >= 0, Int)
+    @variable(feas, o[r = removed] >= 0, Int)
+    @variable(feas, p[r = removed] >= 0, Int)
     @variable(feas, I[i = V(), t = vcat(first(T()) - 1, T())], Int)
 
     @constraint(feas, balance[i = V(), t = T()],
-        I[i,t-1] - I[i,t] - d(i,t) + sum(
-            sum(o★[j,i,k,t] for j in V()) -
-            sum(o★[i,j,k,t] for j in V())
-            for k in K()
-        ) + sum(
-            sum(o[e,k,t] for e in to_repair if e.tujuan == i) -
-            sum(o[e,k,t] for e in to_repair if e.asal == i)
-            for k in K()
-        ) == 0
+        I[i,t-1] - I[i,t] - d(i,t) +
+        sum(m.load for m in filter(p -> p.tujuan == i && p.t == t, destroyed)) -
+        sum(m.load for m in filter(p -> p.asal == i && p.t == t, destroyed)) +
+        sum(o[r] for r in filter(p -> p.tujuan == i && p.t == t, removed)) -
+        sum(o[r] for r in filter(p -> p.asal == i && p.t == t, removed)) == 0
     ) #inventory balance
 
     @constraint(feas, [i = V(), t = T()],
@@ -447,18 +435,18 @@ function repair(destroyed::Vector{delivery},c::String,removed::Vector{delivery})
         I[i,first(T()) - 1] == V(i).START
     ) #Inventory Start
 
-    @constraint(feas, [e = to_repair, k = K(), t = T()],
-        o[e,k,t] <= K(k).Q[e.asal,e.tujuan] * p[e,k,t]
+    @constraint(feas, [r = removed],
+        o[r] <= K(r.k).Q[r.asal,r.tujuan] * p[r]
     ) #load to trips proportion from ij
 
-    @constraint(feas, [e = to_repair, k = K(), t = T()],
-        p[e,k,t] <= K(k).lim[e.asal,e.tujuan]
+    @constraint(feas, [r = removed],
+        p[r] <= K(r.k).lim[r.asal,r.tujuan]
     ) #limit of trips from ij
 
     @objective(feas, Min,
         sum(
-            K(k).g[e.asal,e.tujuan] * p[e,k,t] + K(k).f[e.asal,e.tujuan] * o[e,k,t]
-            for e in to_repair, k in K(), t in T()
+            K(r.k).g[r.asal,r.tujuan] * p[r] + K(r.k).f[r.asal,r.tujuan] * o[r]
+            for r in removed
         ) +
         sum(
             V(i).h * I[i,t]
@@ -466,27 +454,13 @@ function repair(destroyed::Vector{delivery},c::String,removed::Vector{delivery})
         )
     )
 
-    #=@objective(feas, Min,
-        sum(
-            K(k).g[e.asal,e.tujuan] * p[e,k,t]
-            for e in to_repair, k in K(), t in T()
-        )
-    )=#
-
-    set_optimizer_attribute(feas, "Presolve", 2)
-    set_optimizer_attribute(feas, "TimeLimit", 0.1)
-    set_optimizer_attribute(feas, "MIPFocus", 1)
-
     optimize!(feas)
 
     new_deliveries = Vector{delivery}()
-    for e in to_repair, k in K(), t in T()
-        if value(p[e,k,t]) > 0
+    for r in removed
+        if value(p[r]) > 0
             new_delivery = delivery(
-                e.asal,e.tujuan,
-                round(value(o[e,k,t])),
-                ceil(value(o[e,k,t])/K(k).Q[e.asal,e.tujuan]),
-                k,t
+                r.asal, r.tujuan, value(o[r]), value(p[r]), r.k, r.t
             )
             push!(new_deliveries,new_delivery)
         end
@@ -501,10 +475,10 @@ function search(x::Vector{delivery})
     x_best = deepcopy(x)
     counter = 0
 
-    limit = 200
-    while counter < limit && totalCost(x_best) > 3.5e10
-        destroyed,c,removed = destroy(x)
-        x_temp = repair(destroyed,c,removed)
+    limit = 1035
+    while counter < limit && totalCost(x_best) > 3.45e10
+        destroyed,removed = destroy(x)
+        x_temp = repair(destroyed,removed)
 
         if isempty(feasibility(x_temp))
             if totalCost(x_temp) < totalCost(x)
@@ -517,7 +491,7 @@ function search(x::Vector{delivery})
                 counter = 0 #resest counter
             else
                 counter += 1 #no improvement
-                println("counter: $counter")
+                #println("counter: $counter")
             end
         end
     end
