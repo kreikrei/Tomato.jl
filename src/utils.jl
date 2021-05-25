@@ -6,9 +6,6 @@ const vertex_data = Ref{Any}(nothing)
 V() = sort!(collect(keys(vertex_data[])))
 V(i) = vertex_data[][i]
 
-const edge_list = Ref{Any}(nothing)
-all_edges() = edge_list[]
-
 const vehicle_data = Ref{Any}(nothing)
 K() = sort!(collect(keys(vehicle_data[])))
 K(k) = vehicle_data[][k]
@@ -25,7 +22,7 @@ const distance_data = Ref{Any}(nothing)
 dist() = distance_data[]
 dist(i,j) = distance_data[][i,j]
 
-function extract!(path::String) #extract from excel
+function extract!(path::String;f::String) #extract from excel
     xf = XLSX.readxlsx(path) #READ WORKSHEET
     data = Dict{Symbol,DataFrame}() #DATAFRAME DICT
 
@@ -46,6 +43,7 @@ function extract!(path::String) #extract from excel
     )
 
     dist = JuMP.Containers.DenseAxisArray{Float64}(undef, keys(V), keys(V))
+    dist .= 999999999
     for i in keys(V), j in keys(V)
         if i != j
             if f == "haversine"
@@ -56,28 +54,25 @@ function extract!(path::String) #extract from excel
         end
     end
 
-    d = JuMP.Containers.DenseAxisArray(
+    #=d = JuMP.Containers.DenseAxisArray(
         Array{Float64}(data[:non_negative_demands][:,string.(T)]), #dataset
         Array{String}(data[:non_negative_demands].point), #dims 1
         T #dims 2
-    )
+    )=#
 
-    #=d = JuMP.Containers.DenseAxisArray(
+    d = JuMP.Containers.DenseAxisArray(
         Array{Float64}(data[:demands][:,string.(T)]), #dataset
         Array{String}(data[:demands].point), #dims 1
         T #dims 2
-    )=#
+    )
 
     vertex_data[] = V
     vehicle_data[] = K
     period_data[] = T
     demand_data[] = d
-    distance_data = dist
+    distance_data[] = dist
 
-    edges = [(asal=i[1],tujuan=i[2]) for i in collect(permutations(collect(keys(V)),2))]
-    edge_list[] = edges
-
-    return V,K,T,d,edges
+    return V,K,T,d,edges,dist
 end
 
 function process_vertex(df::DataFrame)
