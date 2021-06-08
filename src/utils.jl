@@ -32,7 +32,7 @@ function extract!(path::String;f::String) #extract from excel
     end
 
     V = process_vertex(data[:vertices])
-    K = process_vehicle(data[:vehicles])
+    K = process_vehicle(V,data[:vehicles])
 
     T = collect( #range from starting month for duration
         range(
@@ -86,10 +86,10 @@ function process_vertex(df::DataFrame)
     return V
 end
 
-function process_vehicle(df::DataFrame)
+function process_vehicle(V::Dict,df::DataFrame)
     K = Dict{String,veh}() #INITIATE VEHICLES
-    idx_asal = unique(df.Asal)
-    idx_tujuan = unique(df.Tujuan)
+    idx_asal = collect(keys(V))
+    idx_tujuan = collect(keys(V))
     list_moda = unique(df.Moda)
 
     for m in list_moda

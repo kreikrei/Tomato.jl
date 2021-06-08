@@ -1,14 +1,14 @@
 # =========================================================================
 #    CORE FUNCTIONS AND MECHANISMS
 # =========================================================================
-function original()
+function bnb_tolerance(tolerance::Float64,timelimit::Int64)
     feas = Model(get_optimizer())
     #set_silent(feas)
 
-    #set_optimizer_attribute(feas, "BestObjStop", 3.478e10)
     set_optimizer_attribute(feas, "Cuts", 0)
     set_optimizer_attribute(feas, "Threads", 1)
-    set_optimizer_attribute(feas, "MIPGap", 0.06)
+    set_optimizer_attribute(feas, "MIPGap", tolerance)
+    set_optimizer_attribute(feas, "TimeLimit", timelimit)
 
     @variable(feas, o[i = V(), j = V(), k = K(), t = T()] >= 0, Int)
     @variable(feas, p[i = V(), j = V(), k = K(), t = T()] >= 0, Int)
@@ -125,12 +125,7 @@ function cluster()
     lim_cluster .= 0
 
     for i in V(), j in V()
-        active_mode = Vector{String}()
-        for k in K()
-            if K(k).lim[i,j] > 0
-                push!(active_mode,k)
-            end
-        end #CHECK ALL ACTIVE MODE OF TRANSPORT
+        active_mode = [k for k in K() if K(k).lim[i,j] > 0]
 
         if length(active_mode) >= 1
             weight_vec = Dict{String,Float64}()
@@ -142,7 +137,6 @@ function cluster()
             Q_cluster[i,j] = ceil(sum(weight_vec[m] * K(m).Q[i,j] for m in active_mode))
             f_cluster[i,j] = sum(weight_vec[m] * K(m).f[i,j] for m in active_mode)
             g_cluster[i,j] = sum(weight_vec[m] * K(m).g[i,j] for m in active_mode)
-            #lim_cluster[i,j] = ceil(sum(weight_vec[m] * K(m).lim[i,j] for m in active_mode))
             lim_cluster[i,j] = sum(K(m).lim[i,j] for m in active_mode)
         end #PROSES SEKIRANYA ADA KENDARAAN DI SEGMEN
     end
@@ -153,6 +147,8 @@ end #OUTPUTS NEW AGGREGATED VEHICLE
 function reduced(cluster::veh)
     feas = Model(get_optimizer())
     set_silent(feas)
+
+    set_optimizer_attribute(feas, "Cuts", 0)
     set_optimizer_attribute(feas, "Threads", 1)
 
     @variable(feas, o[i = V(), j = V(), t = T()] >= 0) #RELAXED DELIVERY
@@ -198,7 +194,9 @@ function reduced(cluster::veh)
         if value(p[i,j,t]) > 0
             dis = Model(get_optimizer())
             set_silent(dis)
-            set_optimizer_attribute(dis, "Threads", 1)
+
+            set_optimizer_attribute(feas, "Cuts", 0)
+            set_optimizer_attribute(feas, "Threads", 1)
 
             @variable(dis, load[k = K()] >= 0, Int)
             @variable(dis, trip[k = K()] >= 0, Int)
@@ -220,23 +218,25 @@ function reduced(cluster::veh)
                 end
             end
         end
-    end #DISAGGREGATE SOLUTION FOR EACH SEGMENT
+    end
 
     return deliveries
 end #COMPUTE AGGREGATED SOLUTION
 
-function roundUp(relaxed_sol::Vector{delivery})
+function directRounding(relaxed_sol::Vector{delivery})
     deliveries = Vector{delivery}()
 
     for r in relaxed_sol
-        new_delivery = delivery(r.asal,r.tujuan,r.load,ceil(r.trip),r.k,r.t)
-        push!(deliveries, new_delivery)
+        if r.trip > 0
+            new_delivery = delivery(r.asal,r.tujuan,r.load,ceil(r.trip),r.k,r.t)
+            push!(deliveries, new_delivery)
+        end
     end
 
     return deliveries
 end #ALTERNATIVE FOR FEASIBLE SOL
 
-function splatBuild(relaxed_sol::Vector{delivery})
+function optimalRounding(relaxed_sol::Vector{delivery})
     deliveries = Vector{delivery}()
     unique_asal = unique([p.asal for p in relaxed_sol])
     unique_tujuan = unique([p.tujuan for p in relaxed_sol])
@@ -249,6 +249,8 @@ function splatBuild(relaxed_sol::Vector{delivery})
         if aggregate > 0
             dis = Model(get_optimizer())
             set_silent(dis)
+
+            set_optimizer_attribute(dis, "Cuts", 0)
             set_optimizer_attribute(dis, "Threads", 1)
 
             @variable(dis, o[k = K()] >= 0, Int)
@@ -276,16 +278,19 @@ end #ALTERNATIVE FOR FEASIBLE SOL
 
 function optimizeVolume(deliveries::Vector{delivery})
     OV = Model(get_optimizer())
-    set_silent(OV)
+    #set_silent(OV)
     set_optimizer_attribute(OV, "Threads", 1)
+    set_optimizer_attribute(OV, "Cuts", 0)
+    set_optimizer_attribute(OV, "TimeLimit", length(V()))
 
-    @variable(OV, o[r = deliveries] >= 0)
+    @variable(OV, o[r = deliveries])
+    @variable(OV, p[r = deliveries], Int) #bisa nambahin bisa ngurangin
     @variable(OV, I[i = V(), t = vcat(first(T()) - 1, T())], Int)
 
     @constraint(OV, [i = V(), t = T()],
         I[i,t-1] - I[i,t] - d(i,t) +
-        sum(o[r] for r in filter(p -> p.tujuan == i && p.t == t,deliveries)) -
-        sum(o[r] for r in filter(p -> p.asal == i && p.t == t,deliveries)) == 0
+        sum(r.load + o[r] for r in filter(p -> p.tujuan == i && p.t == t,deliveries)) -
+        sum(r.load + o[r] for r in filter(p -> p.asal == i && p.t == t,deliveries)) == 0
     ) #Inventory Balance
 
     @constraint(OV, [i = V(), t = T()],
@@ -297,12 +302,25 @@ function optimizeVolume(deliveries::Vector{delivery})
     ) #Inventory Start
 
     @constraint(OV, [r = deliveries],
-        o[r] <= K(r.k).Q[r.asal,r.tujuan] * r.trip
+        (r.load + o[r]) <= K(r.k).Q[r.asal,r.tujuan] * (r.trip + p[r])
     ) #quantity to trips proportion from ij
+
+    @constraint(OV, [r=deliveries],
+        (r.load + o[r]) >= 0
+    )
+
+    @constraint(OV, [r = deliveries],
+        (r.trip + p[r]) <= K(r.k).lim[r.asal,r.tujuan]
+    )
+
+    @constraint(OV, [r=deliveries],
+        (r.trip + p[r]) >= 0
+    )
 
     @objective(OV, Min,
         sum(
-            o[r] * K(r.k).f[r.asal,r.tujuan] + r.trip * K(r.k).g[r.asal,r.tujuan]
+            (r.load + o[r]) * K(r.k).f[r.asal,r.tujuan] +
+            (r.trip + p[r]) * K(r.k).g[r.asal,r.tujuan]
             for r in deliveries
         ) +
         sum(
@@ -315,8 +333,8 @@ function optimizeVolume(deliveries::Vector{delivery})
 
     replacement = Vector{delivery}()
     for r in deliveries
-        new_load = value(o[r])
-        new_trip = ceil(new_load/K(r.k).Q[r.asal,r.tujuan]) #revise trip
+        new_load = round(value(o[r]) + r.load)
+        new_trip = round(value(p[r]) + r.trip) #revise trip
 
         if new_trip > 0
             new_delivery = delivery(r.asal, r.tujuan, new_load, new_trip, r.k, r.t)
@@ -399,13 +417,12 @@ function feasibility(deliveries::Vector{delivery})
     return infeasibilities
 end #track infeasibilities in inventory level
 
-function destroy(deliveries::Vector{delivery})
+function random_removal(deliveries::Vector{delivery})
     destroyed = deepcopy(deliveries) #make independent duplicate
     removed = Vector{delivery}()
-    c = Vector{String}()
 
     vertex_set = deepcopy(V()) #vertex set to remove
-    percent_destroy = rand()
+    percent_destroy = rand(Truncated(Normal(0, 1), 0, 0.5))
     while length(removed)/(length(removed)+length(destroyed)) < percent_destroy
         key = rand(vertex_set) #random combination of random length
         deleteat!(vertex_set, findall(x -> x == key, vertex_set)) #remove from candidate
@@ -416,18 +433,61 @@ function destroy(deliveries::Vector{delivery})
         end #remove all
 
         append!(removed,to_remove)
-        push!(c,key)
     end
 
     return destroyed,removed
-end #make the solution infeasible, return destroyed and removed
+end #removal based on cost
+
+function worst_removal(deliveries::Vector{delivery})
+    destroyed = deepcopy(deliveries) #make independent duplicate
+    removed = Vector{delivery}()
+
+    total_cost = deliveryCost(deliveries) #patokan percentage
+
+    cost_group = DataFrame(c=String[],cost=Float64[],delivs=Vector{delivery}[])
+    for c in V()
+        deli_to_c = filter(p -> p.tujuan == c,destroyed)
+        append!(cost_group,DataFrame(c=c,cost=deliveryCost(deli_to_c),delivs=[deli_to_c]))
+    end
+    sort!(cost_group,2;rev = true)
+
+    percent_destroy = rand(Truncated(Normal(0, 1), 0, 0.5))
+    while deliveryCost(removed)/total_cost < percent_destroy
+        left_cost = sum(cost_group.cost)
+        p = [r.cost/left_cost for r in eachrow(cost_group)]
+        roulette = rand()
+
+        fitness_sum = 0
+        chosen = 0
+        for f in 1:length(p)
+            fitness_sum += p[f]
+            if fitness_sum > roulette
+                chosen = f
+                break
+            end
+        end
+
+        to_remove = cost_group.delivs[chosen]
+        append!(removed,to_remove)
+        delete!(cost_group,chosen)
+    end
+
+    for r in removed
+        deleteat!(destroyed, findall(x -> x == r, destroyed))
+    end #remove all
+
+    return destroyed,removed
+end #removal based on random proportion
 
 function repair(destroyed::Vector{delivery},removed::Vector{delivery})
     feas = Model(get_optimizer())
-    #set_silent(feas)
-    set_optimizer_attribute(feas, "Threads", 1)
+    set_silent(feas)
 
-    @variable(feas, o[r = removed] >= 0, Int, start = round(r.load))
+    set_optimizer_attribute(feas, "Threads", 1)
+    set_optimizer_attribute(feas, "Cuts", 0)
+    set_optimizer_attribute(feas, "TimeLimit", log(length(V())))
+
+    @variable(feas, o[r = removed] >= 0, start = round(r.load))
     @variable(feas, p[r = removed] >= 0, Int)
     @variable(feas, I[i = V(), t = vcat(first(T()) - 1, T())], Int)
 
@@ -466,8 +526,6 @@ function repair(destroyed::Vector{delivery},removed::Vector{delivery})
         )
     )
 
-    #set_optimizer_attribute(feas, "MIPGap", 0.001)
-    #set_optimizer_attribute(feas, "MIPFocus", 3)
     optimize!(feas)
 
     new_deliveries = Vector{delivery}()
@@ -485,30 +543,48 @@ function repair(destroyed::Vector{delivery},removed::Vector{delivery})
     return destroyed
 end #make the solution feasible, if not optimal
 
-function search(x::Vector{delivery})
+function lns(x::Vector{delivery};method::String,stop_crit::String,stop_val::Int64)
     x_best = deepcopy(x)
     counter = 0
 
-    limit = length(V())
-    println("termination after: $limit")
+    limit = stop_val
     while counter < limit #&& totalCost(x_best) > 3.475e10
-        destroyed,removed = destroy(x)
-        x_temp = repair(destroyed,removed)
+        if method == "worst"
+            destroyed,removed = worst_removal(x)
+            x_temp = repair(destroyed,removed)
+        elseif method == "random"
+            destroyed,removed = random_removal(x)
+            x_temp = repair(destroyed,removed)
+        end
 
         if isempty(feasibility(x_temp))
             if totalCost(x_temp) < totalCost(x)
                 x = deepcopy(x_temp)
+
+                if totalCost(x_temp) < totalCost(x_best)
+                    x_best = deepcopy(x_temp)
+                    println("new best cost: $(totalCost(x_best)) after $counter iter")
+
+                    if stop_crit == "stagnation"
+                        counter = 0 #resest counter
+                    end
+                else
+                    if stop_crit == "stagnation"
+                        counter += 1 #no improvement
+                    end #println("counter: $counter")
+                end
+            else
+                if stop_crit == "stagnation"
+                    counter += 1 #no improvement
+                end #println("counter: $counter")
             end
         end
 
-        if totalCost(x_temp) < totalCost(x_best)
-            x_best = deepcopy(x_temp)
-            println("new best cost: $(totalCost(x_best)) after $counter iter")
-            counter = 0 #resest counter
-        else
-            counter += 1 #no improvement
-            #println("counter: $counter")
+        if stop_crit == "steps"
+            counter += 1
         end
+
+        println("counter: $counter")
     end
 
     return x_best

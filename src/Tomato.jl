@@ -5,6 +5,7 @@ using XLSX
 using DataFrames
 using Distances
 using Combinatorics
+using Distributions
 
 include("struct.jl")
 include("utils.jl")
@@ -22,13 +23,13 @@ export get_optimizer
 export reset_optimizer
 
 #core
-export relaxed,original
-export cluster,reduced
-export roundUp,splatBuild
-export optimizeVolume,iterOV
+export bnb_tolerance #method
+export relaxed,directRounding,optimalRounding #method 2
+export cluster,reduced #method 3
+export optimizeVolume,iterOV #improvement method 1
 export deliveryCost,inventoryCost,totalCost
 export stockLevels,feasibility
-export destroy,repair,search
+export worst_removal,random_removal,repair,lns
 
 
 end
