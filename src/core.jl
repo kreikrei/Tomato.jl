@@ -422,7 +422,7 @@ function random_removal(deliveries::Vector{delivery})
     removed = Vector{delivery}()
 
     vertex_set = deepcopy(V()) #vertex set to remove
-    percent_destroy = rand(Truncated(Normal(0, 1), 0, 0.5))
+    percent_destroy = rand(truncated(Normal(0, 1), 0, 0.5))
     while length(removed)/(length(removed)+length(destroyed)) < percent_destroy
         key = rand(vertex_set) #random combination of random length
         deleteat!(vertex_set, findall(x -> x == key, vertex_set)) #remove from candidate
@@ -451,7 +451,7 @@ function worst_removal(deliveries::Vector{delivery})
     end
     sort!(cost_group,2;rev = true)
 
-    percent_destroy = rand(Truncated(Normal(0, 1), 0, 0.5))
+    percent_destroy = rand(truncated(Normal(0, 1), 0, 0.5))
     while deliveryCost(removed)/total_cost < percent_destroy
         left_cost = sum(cost_group.cost)
         p = [r.cost/left_cost for r in eachrow(cost_group)]
